@@ -1,0 +1,17 @@
+.DS_Store
+pyenv.cfg
+
+# Ignore virtual environment
+bin/
+lib/
+share/
+include/pyvenv.cfg
+
+# Python cache and metadata
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
