@@ -45,5 +45,10 @@ async def main():
         udp_server.stop()
         udp_server.join()
 
+    motion_client = UR5eMotionClient(host='192.168.0.100')
+
+    graph.connect(ur5e.OUTPUT_JOINTS, motion_client.INPUT_JOINTS)
+    graph.export(motion_client.OUTPUT_FEEDBACK, "joint_feedback")
+
 if __name__ == "__main__":
     asyncio.run(main())
