@@ -1,41 +1,59 @@
-# ur5e_motion_client.py
-import numpy as np
 import time
-from typing import Generator
-
-from ezmsg.util.generator import consumer, Gen
-from ezmsg.util.messages.axisarray import AxisArray
-
+import numpy as np
 from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
-@consumer
-def ur5e_motion(host: str = "192.168.0.100", hz: float = 10.0) -> Generator[AxisArray, AxisArray, None]:
-    # Connection setup
-    rtde_c = RTDEControl(host)
-    rtde_r = RTDEReceive(host)
+class UR5eMotionClient:
+    def __init__(self, host: str = "192.168.0.100", hz: float = 10.0):
+        self.host = host
+        self.hz = hz
+        self.rtde_c = None
+        self.rtde_r = None
+        self.interval = 1.0 / hz
+        self.running = False
 
-    try:
-        last_feedback_time = time.time()
-        interval = 1.0 / hz
+    def connect(self):
+        self.rtde_c = RTDEControl(self.host)
+        self.rtde_r = RTDEReceive(self.host)
+        self.running = True
+        print(f"[UR5e] Connected to {self.host}")
 
-        joint_cmd = np.zeros(6)  # default dummy input
-        feedback = AxisArray(data=np.zeros(6))
+    def disconnect(self):
+        if self.rtde_c:
+            self.rtde_c.stopScript()
+        if self.rtde_r:
+            self.rtde_r.disconnect()
+        self.running = False
+        print("[UR5e] Disconnected.")
 
-        while True:
-            # receive command
-            joint_cmd = yield feedback
-            rtde_c.moveJ(joint_cmd.tolist(), speed=1.0, acceleration=1.2)
+    def send_joint_command(self, joint_positions: np.ndarray, speed=1.0, acceleration=1.2):
+        if self.rtde_c:
+            self.rtde_c.moveJ(joint_positions.tolist(), speed, acceleration)
 
-            # feedback update
-            now = time.time()
-            if now - last_feedback_time >= interval:
-                last_feedback_time = now
-                feedback = AxisArray(data=np.array(rtde_r.getActualQ()))
-    finally:
-        rtde_c.stopScript()
-        rtde_r.disconnect()
+    def get_feedback(self) -> np.ndarray:
+        if self.rtde_r:
+            return np.array(self.rtde_r.getActualQ())
+        return np.zeros(6)
 
-class UR5eMotionClient(Gen):
-    def construct_generator(self):
-        self.STATE.gen = ur5e_motion()
+    def run_loop(self, command_generator):
+        """
+        command_generator: yields np.ndarray joint command
+        """
+        self.connect()
+        try:
+            while self.running:
+                joints = next(command_generator)
+                self.send_joint_command(joints)
+                feedback = self.get_feedback()
+                print(f"Feedback: {np.round(feedback, 3)}")
+                time.sleep(self.interval)
+        except StopIteration:
+            print("[UR5e] Command stream finished.")
+        except KeyboardInterrupt:
+            print("[UR5e] Interrupted by user.")
+        finally:
+            self.disconnect()
+
+
+# if __name__ == "__main__":
+#     client = UR5eMotionClient(host="192.168.0.100", hz=10.0)

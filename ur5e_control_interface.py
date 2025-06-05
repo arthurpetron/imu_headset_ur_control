@@ -1,6 +1,7 @@
 # ur54e_control_interface.py
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from ur5e_kinematics import inverse_kinematics
 
 # UR5e Head Control Interface for ezmsg - https://github.com/ezmsg-org/ezmsg
 # This interface computes the TCP position and orientation based on head orientation
@@ -44,3 +45,9 @@ class UR5eControlInterface:
         y_axis = np.cross(z_axis, x_axis)
         rot_matrix = np.column_stack((x_axis, y_axis, z_axis))
         return R.from_matrix(rot_matrix).as_quat()
+    
+    def compute_joint_angles(self):
+        tcp_orientation = self.compute_tcp_orientation()
+        return inverse_kinematics(self.tcp_position, tcp_orientation)
+        
+        

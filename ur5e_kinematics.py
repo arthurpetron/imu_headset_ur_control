@@ -1,8 +1,9 @@
+# ur5e_kinematics.py
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 from scipy.optimize import minimize
+from scipy.spatial.transform import Rotation as R
 
-# UR5e Denavit–Hartenberg parameters: [theta offset, d, a, alpha]
+# UR5e Denavit–Hartenberg parameters
 DH_PARAMS = [
     [0,     0.1625,   0.0,      np.pi/2],
     [0,     0.0,      -0.425,   0.0],
@@ -30,14 +31,23 @@ def forward_kinematics(joint_angles):
         T = T @ dh_transform(theta, d, a, alpha)
     return T
 
-def ik_objective(joint_angles, desired_tcp):
+def ik_objective(joint_angles, desired_pos, desired_rotmat, pos_weight=1.0, rot_weight=1.0):
     T = forward_kinematics(joint_angles)
-    return np.linalg.norm(T[:3, 3] - desired_tcp)
+    pos_err = np.linalg.norm(T[:3, 3] - desired_pos)
+    rot_err = np.linalg.norm(T[:3, :3] - desired_rotmat)
+    return pos_weight * pos_err**2 + rot_weight * rot_err**2
 
-def inverse_kinematics(desired_tcp, initial_guess=None):
+def inverse_kinematics(desired_pos, desired_quat, initial_guess=None):
     if initial_guess is None:
         initial_guess = np.zeros(6)
-    result = minimize(ik_objective, initial_guess, args=(desired_tcp,), bounds=[(-np.pi, np.pi)]*6)
+    desired_rotmat = R.from_quat(desired_quat).as_matrix()
+    result = minimize(
+        ik_objective,
+        initial_guess,
+        args=(desired_pos, desired_rotmat),
+        bounds=[(-np.pi, np.pi)] * 6,
+        options={'maxiter': 200}
+    )
     if result.success:
         return result.x
     else:
