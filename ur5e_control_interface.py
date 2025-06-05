@@ -1,9 +1,5 @@
+# ur54e_control_interface.py
 import numpy as np
-from ezmsg.core import Component, InputStream, OutputStream, Message
-from ezmsg.util.messages.pose import PoseStamped
-from typing import Optional
-
-from ur5e_kinematics import inverse_kinematics  # your DH-based solver
 from scipy.spatial.transform import Rotation as R
 
 # UR5e Head Control Interface for ezmsg - https://github.com/ezmsg-org/ezmsg
@@ -48,28 +44,3 @@ class UR5eControlInterface:
         y_axis = np.cross(z_axis, x_axis)
         rot_matrix = np.column_stack((x_axis, y_axis, z_axis))
         return R.from_matrix(rot_matrix).as_quat()
-
-class UR5eHeadControl(Component):
-    INPUT_ORIENTATION = InputStream(np.ndarray)
-    OUTPUT_TCP_POSE = OutputStream(PoseStamped)
-    OUTPUT_JOINTS = OutputStream(np.ndarray)
-
-    def __init__(self):
-        self.controller = UR5eControlInterface()
-
-    async def on_input(self, msg: Message):
-        theta = msg.data
-        pos, _ = self.controller.update_from_head_orientation(theta)
-        quat = self.controller.compute_tcp_orientation()
-
-        pose_msg = PoseStamped(
-            frame_id="base_link",
-            timestamp=msg.timestamp,
-            position=pos.tolist(),
-            orientation=quat.tolist()
-        )
-        await self.OUTPUT_TCP_POSE.send(pose_msg)
-
-        joints = inverse_kinematics(pos, quat)
-        if joints is not None:
-            await self.OUTPUT_JOINTS.send(joints)
